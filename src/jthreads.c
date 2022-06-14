@@ -103,12 +103,12 @@ static PyObject *start(Thread *self) {
 
     PyObject *result = PyObject_Call(self->target, self->positional, self->keyword);
     if (result == NULL) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to call func");
+        PyErr_SetString(PyExc_RuntimeError, "Function call failed");
         return NULL;
     }
 
     self->completed = true;
-    return Py_None;
+    return result;
 }
 
 static PyMethodDef thread_methods[] = {
