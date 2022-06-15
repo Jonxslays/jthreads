@@ -5,11 +5,15 @@ BFLAGS=--inplace
 TEST=tests
 TESTS=$(wildcard $(TEST)/test_*.py)
 
-all:
+all: clean
 	$(PY) $(SETUP) $(CMD) $(BFLAGS)
+
+install: clean
+	$(PY) $(SETUP) install -f
 
 test: $(TESTS)
 	@for file in $^; do $(PY) $${file}; done;
 
 clean:
-	$(RM) -r build jthreads*.so
+	pip uninstall jthreads && \
+		$(RM) -r build dist jthreads*.so jthreads*.egg-info
