@@ -1,7 +1,8 @@
 #define PY_SSIZE_T_CLEAN
+#include <pthread.h>
 #include <Python.h>
-#include "structmember.h"
 #include <stdbool.h>
+#include "structmember.h"
 
 typedef struct {
     PyObject_HEAD;
@@ -9,9 +10,13 @@ typedef struct {
     PyObject *name;
     PyObject *positional;
     PyObject *keyword;
+    pthread_t thread;
     bool started;
     bool completed;
 } Thread;
+
+// FIXME: Figure out how to hook into the GIL
+// If we try to start more than 1 thread it dies :(
 
 static void thread_dealloc(Thread *self) {
     Py_XDECREF(self->target);
@@ -47,6 +52,7 @@ static PyObject *thread_alloc(PyTypeObject *type, PyObject *args, PyObject *kwar
         self->started = false;
         self->completed = false;
         self->target = NULL;
+        self->thread = (pthread_t) NULL;
     }
 
     return (PyObject *) self;
@@ -86,33 +92,73 @@ static int thread_init(Thread *self, PyObject *args, PyObject *kwargs) {
     return 0;
 }
 
+// FIXME: These members can be changed by end users, not great.
+// This is C, not python!
+
 static PyMemberDef thread_members[] = {
     {"target", T_OBJECT_EX, offsetof(Thread, target), 0, "Target"},
     {"name", T_OBJECT_EX, offsetof(Thread, name), 0, "Name"},
     {"positional", T_OBJECT_EX, offsetof(Thread, positional), 0, "Positional Args"},
     {"keyword", T_OBJECT_EX, offsetof(Thread, keyword), 0, "Keyword Args"},
+    {"thread", T_ULONG, offsetof(Thread, thread), 0, "Posix Thread"},
     {"started", T_BOOL, offsetof(Thread, started), 0, "Started"},
     {"completed", T_BOOL, offsetof(Thread, completed), 0, "Completed"},
     {NULL},
 };
 
-static PyObject *start(Thread *self) {
-    self->started = true;
+void *handle_thread_target(void *thread_p) {
+    Thread *thread = (Thread *) thread_p;
 
-    // TODO: Use pthreads here
-
-    PyObject *result = PyObject_Call(self->target, self->positional, self->keyword);
+    PyObject *result = PyObject_Call(thread->target, thread->positional, thread->keyword);
     if (result == NULL) {
-        PyErr_SetString(PyExc_RuntimeError, "Function call failed");
+        PyErr_SetString(PyExc_RuntimeError, "Thread target function call failed");
         return NULL;
     }
 
-    self->completed = true;
-    return result;
+    thread->completed = true;
+    return (void *) result;
+}
+
+static PyObject *thread_start(Thread *self) {
+    if (self->started) {
+        // Imagine
+        PyErr_SetString(PyExc_RuntimeError, "You can only start a thread once");
+        return NULL;
+    }
+
+    // TODO: Get the resulting PyObject *value from the thread
+
+    self->started = true;
+    int success = pthread_create(&self->thread, NULL, handle_thread_target, (void *) self);
+    if (success) {
+        // Thread creation failed
+        PyErr_SetString(PyExc_RuntimeError, "Failed to create new thread");
+        return NULL;
+    }
+
+    return Py_None;
+}
+
+static PyObject *thread_join(Thread *self) {
+    if (!self->started) {
+        // Cant join a party that doesn't exist
+        PyErr_SetString(PyExc_RuntimeError, "You must start the thread to join it");
+        return NULL;
+    }
+
+    int success = pthread_join(self->thread, NULL);
+    if (success) {
+        // Thread creation failed
+        PyErr_SetString(PyExc_RuntimeError, "Failed to join thread");
+        return NULL;
+    }
+
+    return Py_None;
 }
 
 static PyMethodDef thread_methods[] = {
-    {"start", (PyCFunction) start, METH_NOARGS, "Start the thread."},
+    {"start", (PyCFunction) thread_start, METH_NOARGS, "Start the thread."},
+    {"join", (PyCFunction) thread_join, METH_NOARGS, "Join the thread."},
     {NULL},
 };
 
