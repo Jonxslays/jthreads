@@ -4,6 +4,8 @@ A threading implementation for Python written in C.
 
 > NOTE: Work in progress - for fun, not production.
 
+**WARNING**: *Currently a broken impl use at your own risk*.
+
 ## Trying it out
 
 ```bash
