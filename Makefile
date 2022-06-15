@@ -1,14 +1,15 @@
 PY=python
 SETUP=setup.py
-CMD=install
+CMD=build_ext
+BFLAGS=--inplace
 TEST=tests
 TESTS=$(wildcard $(TEST)/test_*.py)
 
 all:
-	$(PY) $(SETUP) $(CMD)
+	$(PY) $(SETUP) $(CMD) $(BFLAGS)
 
 test: $(TESTS)
 	@for file in $^; do $(PY) $${file}; done;
 
 clean:
-	$(RM) -r build dist *.egg-info
+	$(RM) -r build jthreads*.so
